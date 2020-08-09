@@ -1,11 +1,18 @@
 /*
- * Control analog joystick using the HID driver of the o/s ie no specific device driver required.
- * Joystick simulates pressing WASD keys for gaming purposes, typically moving camera view.
- * Joystick switch sends out special code. Onboard led lights up when switch is pressed as a
- * visual confirmation. Handles simultaneous WD,WA,SA,SD presses for NE,NW,SW,SE movements.
- * Board support: ATmega32U4(Leonardo,Micro), Digispark(ATTiny85). STM32 not working, unknown USB descriptor.
- * For STM32, Tools -> USB Support: HID (keyboard and mouse).
- * See also https://github.com/MHeironimus/ArduinoJoystickLibrary  (but no attiny support).
+  Control analog joystick using the HID driver of the o/s ie no specific device driver required.
+  Joystick simulates pressing WASD keys for gaming purposes, typically moving camera view.
+  Joystick switch sends out special code. Onboard led lights up when switch is pressed as a
+  visual confirmation. Handles simultaneous WD,WA,SA,SD presses for NE,NW,SW,SE movements.
+  Board support: ATmega32U4(Leonardo,Micro), Digispark(ATTiny85). STM32 not working, unknown USB descriptor.
+  For STM32, Tools -> USB Support: HID (keyboard and mouse).
+  
+  Note: game engines process keypresses(up/down) from the keyboard, not characters (keypress codes are not the same
+  as character codes). When 2 keys such as W and D are pressed simultaneously, the game engine detects 2 keypresses and
+  will move the camera in a NE direction. When W is released, the D keypress remains in effect with camera moving E.
+ 
+  MIT License
+  Copyright (c) 2020 Alex Wong
+  
  */
 #if defined(__AVR_ATmega32U4__) || defined(ARDUINO_ARCH_STM32)
   #include "Keyboard.h"
@@ -42,7 +49,10 @@
   //SoftSerial Serial(DEBUG_TX_RX_PIN, DEBUG_TX_RX_PIN);
 #endif
 
-//W1023 E0, N1023 S0, center X520 Y498 (joystick pins pointing to east).
+//ADC values at various joystick positions: W1023 E0, N1023 S0, center X520 Y498
+//Joystick orientation: board pins pointing to right.
+
+//If analogX or Y ADC value is within(or exceed) threshold limits below, the joystick position is confirmed.
 #define W_X  550
 #define E_X  450
 #define N_Y  550
@@ -78,6 +88,7 @@ bool isClick(int button,int LEVEL_CHANGE) {
   return false;
 }
 
+//send key press to HID driver.
 void sendKey(byte keychr) {
 #if defined(__AVR_ATmega32U4__)  || defined(ARDUINO_ARCH_STM32)
   Keyboard.press(keychr);
@@ -86,6 +97,7 @@ void sendKey(byte keychr) {
 #endif
 }
 
+//send key char to HID driver.
 void sendKeyRel(byte keychr) {
 #if defined(__AVR_ATmega32U4__)  || defined(ARDUINO_ARCH_STM32)
   Keyboard.write(keychr);
@@ -94,6 +106,7 @@ void sendKeyRel(byte keychr) {
 #endif
 }
 
+//send key release to HID driver.
 void freeKey(byte keychr) {
 #if defined(__AVR_ATmega32U4__)  || defined(ARDUINO_ARCH_STM32)
   Keyboard.release(keychr);
@@ -102,6 +115,7 @@ void freeKey(byte keychr) {
 #endif
 }
 
+//send all key release to HID driver.
 void freeKeyAll() {
 #if defined(__AVR_ATmega32U4__)  || defined(ARDUINO_ARCH_STM32)
   Keyboard.releaseAll();
@@ -110,9 +124,10 @@ void freeKeyAll() {
 #endif
 }
 
+//turn LED on/off. 
 void setLed(int ledpin,int state) {
 #if defined(__AVR_ATmega32U4__)
-  digitalWrite(ledpin,!state);
+  digitalWrite(ledpin,!state);     //inverse of normal state
 #else
   digitalWrite(ledpin,state);
 #endif
@@ -125,12 +140,12 @@ void setup() {
   setLed(LED_BUILTIN,0);
   #if defined(__AVR_ATmega32U4__) || defined(ARDUINO_AVR_DIGISPARK)
     ADCSRA =  bit (ADEN);
-    ADCSRA |= bit (ADPS2);               //1mhz ADC clock
+    ADCSRA |= bit (ADPS2);             //1mhz ADC clock
   #endif
   #if defined(__AVR_ATmega32U4__)
     Keyboard.begin();
   #endif
-  analogRead(ANALOGX);
+  analogRead(ANALOGX);  //always discard first analogread
   analogRead(ANALOGY);
 }
 
@@ -144,7 +159,7 @@ void loop() {
   x = analogRead(ANALOGX);          //Read X  idle 522
   y = analogRead(ANALOGY);          //Read Y  idle 498
   //Serial.print("X: "); Serial.print(x); Serial.print(", Y: "); Serial.println(y);
-  if ((x < W_X && x > E_X) && (y > S_Y && y < N_Y)) {
+  if ((x < W_X && x > E_X) && (y > S_Y && y < N_Y)) {     //compare ADC values against threshold limits.
     pos=0;     //center
   }
   else if ((x < W_X && x > E_X) && (y > N_Y)) {
@@ -169,7 +184,7 @@ void loop() {
   }
 
   //Serial.println(pos);
-  if (pos != prevpos) {
+  if (pos != prevpos) {     //change direction if joystick position has changed
     freeKeyAll();
     switch (pos) {
       case 0:
