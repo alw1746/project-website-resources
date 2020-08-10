@@ -6,7 +6,7 @@
   Board support: ATmega32U4(Leonardo,Micro), Digispark(ATTiny85). STM32 not working, unknown USB descriptor.
   For STM32, Tools -> USB Support: HID (keyboard and mouse).
   
-  Note: game engines process keypresses(up/down) from the keyboard, not characters (keypress codes are not the same
+  Note: game engines process keypresses(key down) from the keyboard, not characters (keypress codes are not the same
   as character codes). When 2 keys such as W and D are pressed simultaneously, the game engine detects 2 keypresses and
   will move the camera in a NE direction. When W is released, the D keypress remains in effect with camera moving E.
  
